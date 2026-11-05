@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Travel widgets · demos</title>
+<style>
+  :root { color-scheme: light dark; --ink:#1c1f24; --muted:#6b7280; --blue:#3b7ddd; --line:rgba(127,127,127,.22); }
+  @media (prefers-color-scheme: dark) { :root { --ink:#eef0f3; --muted:#9aa1ab; --blue:#6aa4ff; --line:rgba(255,255,255,.14); } }
+  body { margin:0; padding:24px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; color:var(--ink); background:transparent; max-width:760px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  p.lead { color:var(--muted); margin:0 0 20px; font-size:14px; line-height:1.5; }
+  ul { list-style:none; padding:0; margin:0; }
+  li { border-top:1px solid var(--line); padding:14px 0; }
+  li:last-child { border-bottom:1px solid var(--line); }
+  a { color:var(--blue); font-weight:600; text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .desc { color:var(--muted); font-size:13px; margin-top:4px; line-height:1.4; }
+  code { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>Travel widgets</h1>
+<p class="lead">Generic widgets that read all their data from URL parameters. This page contains demo data only. Live parameters are sent to the host and may appear in logs and browser history. Never include secrets. See README.md for every parameter.</p>
+<ul>
+  <li>
+    <a href="countdown.html?flight=ZZ100&amp;from=AAA&amp;to=BBB&amp;dep=2030-01-01T13:10:00%2B04:00&amp;label=Demo%20trip&amp;alert=1">Countdown · demo with alert</a>
+    <div class="desc">Live countdown, route, local departure time. Orange "times differ" note on.</div>
+  </li>
+  <li>
+    <a href="countdown.html?flight=ZZ200&amp;from=CCC&amp;to=DDD&amp;dep=2030-03-02T08:45:00%2B04:00&amp;label=Demo%20trip">Countdown · demo without alert</a>
+    <div class="desc">Same widget, no alert note.</div>
+  </li>
+  <li>
+    <a href="countdown.html">Countdown · empty state</a>
+    <div class="desc">No params, shows the tasteful empty state.</div>
+  </li>
+  <li>
+    <a href="map.html?visited=Paris:48.86:2.35,London:51.51:-0.13,Sydney:-33.87:151.21&amp;planned=Tokyo:35.68:139.69,Oslo:59.91:10.75&amp;home=Example:0:0">Destinations map · demo</a>
+    <div class="desc">3 visited (green), 2 planned (blue), home (gray dot).</div>
+  </li>
+  <li>
+    <a href="map.html">Destinations map · empty state</a>
+    <div class="desc">No params, shows the base map and a hint.</div>
+  </li>
+</ul>
+</body>
+</html>

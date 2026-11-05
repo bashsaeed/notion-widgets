@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Destinations map</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --visited: #23a26d;   /* green = done */
+    --planned: #3b7ddd;   /* blue = house/plan */
+    --home: #8b919a;      /* gray = neutral */
+    --ink: #1c1f24;
+    --muted: #6b7280;
+    --land: #dde2e9;
+    --grat: rgba(127, 127, 127, 0.16);
+    --halo: #ffffff;
+    --chip: rgba(127, 127, 127, 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --visited: #43c48b;
+      --planned: #6aa4ff;
+      --home: #9aa1ab;
+      --ink: #eef0f3;
+      --muted: #9aa1ab;
+      --land: #2b3139;
+      --grat: rgba(255, 255, 255, 0.08);
+      --halo: #111418;
+      --chip: rgba(255, 255, 255, 0.07);
+    }
+  }
+
+  html, body {
+    margin: 0;
+    background: transparent;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { box-sizing: border-box; padding: 10px 12px; min-height: 100vh; }
+
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 12px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .counts { display: flex; gap: 12px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  .counts b { color: var(--ink); font-weight: 700; }
+  .dot {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: 0;
+  }
+  .dot.v { background: var(--visited); }
+  .dot.p { background: var(--planned); }
+  .dot.h { background: var(--home); }
+
+  svg.map { display: block; width: 100%; height: auto; }
+  .land { fill: var(--land); }
+  .grat { stroke: var(--grat); stroke-width: 0.25; fill: none; }
+  .pin { stroke: var(--halo); stroke-width: 0.9; }
+  .pin.v { fill: var(--visited); }
+  .pin.p { fill: var(--planned); }
+  .pin.h { fill: var(--home); }
+  .pin.h-ring { fill: none; stroke: var(--home); stroke-width: 0.45; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    background: var(--chip);
+    border-radius: 999px;
+    padding: 3px 9px 3px 7px;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chip .dot { margin-right: 6px; }
+  .empty-note { color: var(--muted); font-size: 13px; margin-top: 8px; line-height: 1.4; }
+  .empty-note code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div class="counts" id="counts"></div>
+  <div class="counts hidden" id="homeLabel"></div>
+</div>
+
+<svg class="map" id="map" viewBox="0 0 360 145" role="img" aria-label="World map of visited and planned destinations"></svg>
+
+<div class="legend" id="legend"></div>
+<div class="empty-note hidden" id="emptyNote"></div>
+
+<script src="land.js"></script>
+<script>
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+  var q = new URLSearchParams(location.search);
+
+  // Name:lat:lon, comma-separated. Names must not contain commas or colons.
+  function parseList(s) {
+    if (!s) return [];
+    return s.split(',').map(function (t) { return t.trim(); }).filter(Boolean).map(function (t) {
+      var p = t.split(':');
+      if (p.length < 3) return null;
+      var lat = parseFloat(p[p.length - 2]);
+      var lon = parseFloat(p[p.length - 1]);
+      var name = p.slice(0, -2).join(':').trim();
+      if (!name || isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+      return { name: name, lat: lat, lon: lon };
+    }).filter(Boolean);
+  }
+
+  var visited = parseList(q.get('visited'));
+  var planned = parseList(q.get('planned'));
+  var home = parseList(q.get('home'))[0] || null;
+
+  // Equirectangular projection: lon -180..180 → x 0..360, lat 85..-60 → y 0..145
+  function X(lon) { return lon + 180; }
+  function Y(lat) { return 85 - lat; }
+
+  function el(name, attrs, parent) {
+    var e = document.createElementNS(NS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  var svg = document.getElementById('map');
+
+  // Graticule
+  var g = el('g', {}, svg);
+  for (var lon = -150; lon <= 180; lon += 30) el('line', { x1: X(lon), y1: 0, x2: X(lon), y2: 145, class: 'grat' }, g);
+  for (var lat = -60; lat <= 60; lat += 30) el('line', { x1: 0, y1: Y(lat), x2: 360, y2: Y(lat), class: 'grat' }, g);
+
+  // Land (vendored, simplified)
+  var land = el('g', {}, svg);
+  (window.WORLD_LAND || []).forEach(function (poly) {
+    var d = poly.map(function (pt, i) {
+      return (i ? 'L' : 'M') + X(pt[0]).toFixed(1) + ' ' + Y(pt[1]).toFixed(1);
+    }).join('') + 'Z';
+    el('path', { d: d, class: 'land' }, land);
+  });
+
+  // Pins
+  var pins = el('g', {}, svg);
+  function pin(p, cls, r) {
+    var c = el('circle', { cx: X(p.lon).toFixed(1), cy: Y(p.lat).toFixed(1), r: r, class: 'pin ' + cls }, pins);
+    var t = el('title', {}, c);
+    t.textContent = p.name;
+    return c;
+  }
+  if (home) {
+    el('circle', { cx: X(home.lon).toFixed(1), cy: Y(home.lat).toFixed(1), r: 5.2, class: 'pin h-ring' }, pins);
+    pin(home, 'h', 2.8);
+  }
+  planned.forEach(function (p) { pin(p, 'p', 3.2); });
+  visited.forEach(function (p) { pin(p, 'v', 3.2); });
+
+  // Counts & legend
+  var counts = document.getElementById('counts');
+  counts.innerHTML =
+    '<span><span class="dot v"></span><b>' + visited.length + '</b> visited</span>' +
+    '<span><span class="dot p"></span><b>' + planned.length + '</b> planned</span>';
+
+  var homeEl = document.getElementById('homeLabel');
+  if (home) {
+    homeEl.classList.remove('hidden');
+    homeEl.innerHTML = '<span><span class="dot h"></span>home: ' + escapeHtml(home.name) + '</span>';
+  } else {
+    homeEl.classList.add('hidden');
+  }
+
+  var legend = document.getElementById('legend');
+  function chips(list, cls) {
+    list.forEach(function (p) {
+      var c = document.createElement('span');
+      c.className = 'chip';
+      c.title = p.name;
+      c.innerHTML = '<span class="dot ' + cls + '"></span>' + escapeHtml(p.name);
+      legend.appendChild(c);
+    });
+  }
+  chips(visited, 'v');
+  chips(planned, 'p');
+
+  if (!visited.length && !planned.length) {
+    var note = document.getElementById('emptyNote');
+    note.classList.remove('hidden');
+    note.innerHTML = 'No destinations yet. Add <code>visited</code> and <code>planned</code> as ' +
+      '<code>Name:lat:lon</code> lists, e.g. <code>?visited=Dubai:25.20:55.27</code>.';
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Next flight · countdown</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    /* Travel Dashboard palette: blue = house, green = done, orange = attention, gray = neutral */
+    --blue: #3b7ddd;
+    --green: #23a26d;
+    --orange: #e8842c;
+    --gray: #8b919a;
+    --ink: #1c1f24;
+    --muted: #6b7280;
+    --tile: rgba(59, 125, 221, 0.07);
+    --line: rgba(127, 127, 127, 0.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --blue: #6aa4ff;
+      --green: #43c48b;
+      --orange: #f5a25a;
+      --gray: #9aa1ab;
+      --ink: #eef0f3;
+      --muted: #9aa1ab;
+      --tile: rgba(106, 164, 255, 0.10);
+      --line: rgba(255, 255, 255, 0.14);
+    }
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { box-sizing: border-box; padding: 12px 14px; overflow: hidden; }
+
+  .card {
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    min-width: 0;
+  }
+  .top .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top .flight { color: var(--blue); font-weight: 700; white-space: nowrap; }
+
+  .route {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: clamp(18px, 4.6vw, 26px);
+    font-weight: 700;
+    letter-spacing: .02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .route .arrow { color: var(--blue); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .cell {
+    background: var(--tile);
+    border-radius: 10px;
+    padding: 6px 4px 5px;
+    text-align: center;
+    min-width: 0;
+  }
+  .num {
+    display: block;
+    font-size: clamp(28px, 8.4vw, 52px);
+    font-weight: 700;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+  }
+  .unit {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .foot strong { color: var(--ink); font-weight: 600; }
+
+  .alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--orange);
+    border-left: 3px solid var(--orange);
+    padding: 2px 8px;
+    border-radius: 0 6px 6px 0;
+  }
+
+  /* Departed & empty states */
+  .state {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 100%;
+  }
+  .state .big { font-size: clamp(22px, 5.6vw, 34px); font-weight: 700; }
+  .state .sub { font-size: 14px; color: var(--muted); max-width: 40ch; line-height: 1.4; }
+  .state.done .big { color: var(--green); }
+  .state.empty .big { color: var(--gray); font-size: clamp(18px, 4.4vw, 24px); }
+  .state code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <!-- Live state -->
+  <div id="live" class="hidden">
+    <div class="top">
+      <span class="label" id="label">Next flight</span>
+      <span class="flight" id="flight"></span>
+    </div>
+    <div class="route" aria-label="route">
+      <span id="from">---</span><span class="arrow" aria-hidden="true">→</span><span id="to">---</span>
+    </div>
+    <div class="grid" id="grid" role="timer" aria-label="Time until departure">
+      <div class="cell"><span class="num" id="d">00</span><span class="unit">days</span></div>
+      <div class="cell"><span class="num" id="h">00</span><span class="unit">hours</span></div>
+      <div class="cell"><span class="num" id="m">00</span><span class="unit">min</span></div>
+      <div class="cell"><span class="num" id="s">00</span><span class="unit">sec</span></div>
+    </div>
+    <div class="foot">
+      <span>Departs <strong id="depDate"></strong> at <strong id="depTime"></strong> <span id="depZone"></span></span>
+      <span id="yourTime" class="hidden"></span>
+    </div>
+    <div id="alert" class="alert hidden">⚠️ Times differ, check ticket</div>
+  </div>
+
+  <!-- Departed -->
+  <div id="done" class="state done hidden">
+    <div class="big">✈️ Departed</div>
+    <div class="sub" id="doneSub">Enjoy the trip.</div>
+  </div>
+
+  <!-- Empty / invalid params -->
+  <div id="empty" class="state empty hidden">
+    <div class="big">No flight set</div>
+    <div class="sub" id="emptyMsg">Add <code>flight</code>, <code>from</code>, <code>to</code> and <code>dep</code> to the link to show a countdown.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var q = new URLSearchParams(location.search);
+
+  function show(id) {
+    ['live', 'done', 'empty'].forEach(function (k) { $(k).classList.toggle('hidden', k !== id); });
+  }
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+
+  var flight = (q.get('flight') || '').trim().toUpperCase();
+  var from = (q.get('from') || '').trim().toUpperCase();
+  var to = (q.get('to') || '').trim().toUpperCase();
+  var label = (q.get('label') || 'Next flight').trim();
+  var alertOn = q.get('alert') === '1';
+
+  // URLSearchParams turns a raw "+" into a space, so "+04:00" arrives as " 04:00".
+  // Restore it (documented: use %2B in links, but be forgiving here).
+  var dep = (q.get('dep') || '').trim().replace(/ (\d{2}:?\d{2})$/, '+$1');
+
+  var missing = [];
+  if (!flight) missing.push('flight');
+  if (!from) missing.push('from');
+  if (!to) missing.push('to');
+  if (!dep) missing.push('dep');
+
+  if (missing.length) {
+    show('empty');
+    $('emptyMsg').innerHTML = 'Missing <code>' + missing.join('</code>, <code>') + '</code>. ' +
+      'Add them to the link to show a countdown.';
+    return;
+  }
+
+  // Require an explicit UTC offset so the instant is unambiguous.
+  var off = dep.match(/(Z|[+-]\d{2}:?\d{2})$/);
+  var ms = Date.parse(dep);
+  if (!off || isNaN(ms)) {
+    show('empty');
+    $('emptyMsg').innerHTML = '<code>dep</code> needs a date, time and offset, e.g. <code>2030-01-01T13:10:00+04:00</code>.';
+    return;
+  }
+
+  var offMin = 0;
+  if (off[1] !== 'Z') {
+    var om = off[1].match(/([+-])(\d{2}):?(\d{2})/);
+    offMin = (om[1] === '-' ? -1 : 1) * (parseInt(om[2], 10) * 60 + parseInt(om[3], 10));
+  }
+  var offLabel = off[1] === 'Z' ? 'UTC' : 'UTC' + off[1].replace(/^([+-]\d{2})(\d{2})$/, '$1:$2');
+
+  // Wall-clock fields as written in the departure's own zone (no timezone library needed).
+  var wall = dep.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  var depDateTxt = '', depTimeTxt = '';
+  if (wall) {
+    depTimeTxt = wall[4] + ':' + wall[5];
+    depDateTxt = new Date(Date.UTC(+wall[1], +wall[2] - 1, +wall[3]))
+      .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+
+  $('label').textContent = label;
+  $('flight').textContent = flight;
+  $('from').textContent = from;
+  $('to').textContent = to;
+  $('depDate').textContent = depDateTxt;
+  $('depTime').textContent = depTimeTxt;
+  $('depZone').textContent = '(' + offLabel + ')';
+  $('alert').classList.toggle('hidden', !alertOn);
+  document.title = flight + ' · ' + from + ' → ' + to;
+
+  // Show the viewer's local time too when their zone differs from the departure's.
+  var viewerOffMin = -new Date(ms).getTimezoneOffset();
+  if (viewerOffMin !== offMin) {
+    var vt = new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    $('yourTime').textContent = '· ' + vt + ' your time';
+    $('yourTime').classList.remove('hidden');
+  }
+
+  show('live');
+
+  function tick() {
+    var diff = ms - Date.now();
+    if (diff <= 0) {
+      show('done');
+      $('doneSub').textContent = flight + ' · ' + from + ' → ' + to + '. Enjoy the trip.';
+      clearInterval(timer);
+      return;
+    }
+    var s = Math.floor(diff / 1000);
+    $('d').textContent = pad(Math.floor(s / 86400));
+    $('h').textContent = pad(Math.floor((s % 86400) / 3600));
+    $('m').textContent = pad(Math.floor((s % 3600) / 60));
+    $('s').textContent = pad(s % 60);
+  }
+
+  tick();
+  var timer = setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>
