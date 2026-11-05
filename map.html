@@ -10,7 +10,7 @@
     color-scheme: light dark;
     --visited: #23a26d;   /* green = done */
     --planned: #3b7ddd;   /* blue = house/plan */
-    --home: #8b919a;      /* gray = neutral */
+    --home: #343a43;      /* high-contrast neutral = current location */
     --ink: #1c1f24;
     --muted: #6b7280;
     --land: #dde2e9;
@@ -22,7 +22,7 @@
     :root {
       --visited: #43c48b;
       --planned: #6aa4ff;
-      --home: #9aa1ab;
+      --home: #eef0f3;
       --ink: #eef0f3;
       --muted: #9aa1ab;
       --land: #2b3139;
@@ -39,21 +39,27 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  body { box-sizing: border-box; padding: 10px 12px; min-height: 100vh; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    box-sizing: border-box; padding: 10px 12px;
+    display: flex; flex-direction: column;
+  }
 
   .head {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: space-between;
     gap: 4px 12px;
     font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: .08em;
+    white-space: nowrap;
     color: var(--muted);
     margin-bottom: 6px;
   }
-  .counts { display: flex; gap: 12px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  .counts { display: flex; gap: 12px; font-variant-numeric: tabular-nums; }
+  #homeLabel { min-width: 0; overflow: hidden; }
+  #homeLabel > span { overflow: hidden; text-overflow: ellipsis; }
   .counts b { color: var(--ink); font-weight: 700; }
   .dot {
     display: inline-block;
@@ -64,16 +70,33 @@
   }
   .dot.v { background: var(--visited); }
   .dot.p { background: var(--planned); }
-  .dot.h { background: var(--home); }
+  .dot.h { background: var(--home); outline: 1px solid var(--home); outline-offset: 2px; }
 
-  svg.map { display: block; width: 100%; height: auto; }
+  svg.map { display: block; width: 100%; height: 0; min-height: 0; flex: 1 1 0; }
   .land { fill: var(--land); }
   .grat { stroke: var(--grat); stroke-width: 0.25; fill: none; }
   .pin { stroke: var(--halo); stroke-width: 0.9; }
   .pin.v { fill: var(--visited); }
   .pin.p { fill: var(--planned); }
   .pin.h { fill: var(--home); }
-  .pin.h-ring { fill: none; stroke: var(--home); stroke-width: 0.45; }
+  .pin.h-ring {
+    fill: none; stroke: var(--home); stroke-width: 0.7;
+    transform-box: fill-box; transform-origin: center;
+    animation: location-pulse 2s ease-out infinite;
+    pointer-events: none;
+  }
+  @keyframes location-pulse {
+    from { transform: scale(1); opacity: .8; }
+    to { transform: scale(2.5); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pin.h-ring { animation: none; opacity: .65; }
+  }
+  .home-name {
+    fill: var(--home); font-size: 6px; font-weight: 700;
+    paint-order: stroke; stroke: var(--halo); stroke-width: 2px;
+    stroke-linejoin: round;
+  }
 
   .legend {
     display: flex;
@@ -81,6 +104,13 @@
     gap: 6px;
     margin-top: 8px;
     font-size: 12px;
+    flex: 0 1 auto;
+    max-height: 20%;
+    overflow: auto;
+  }
+  @media (max-width: 599px), (max-height: 359px) {
+    .legend { display: none; }
+    .head { justify-content: flex-start; gap: 12px; }
   }
   .chip {
     display: inline-flex;
@@ -174,12 +204,19 @@
     t.textContent = p.name;
     return c;
   }
+  planned.forEach(function (p) { pin(p, 'p', 3.2); });
+  visited.forEach(function (p) { pin(p, 'v', 3.2); });
+  // Current location stays above destinations, even when coordinates overlap.
   if (home) {
     el('circle', { cx: X(home.lon).toFixed(1), cy: Y(home.lat).toFixed(1), r: 5.2, class: 'pin h-ring' }, pins);
     pin(home, 'h', 2.8);
+    var label = el('text', {
+      x: (X(home.lon) + (home.lon > 140 ? -7 : 7)).toFixed(1),
+      y: (Y(home.lat) + 2).toFixed(1),
+      'text-anchor': home.lon > 140 ? 'end' : 'start', class: 'home-name'
+    }, pins);
+    label.textContent = home.name;
   }
-  planned.forEach(function (p) { pin(p, 'p', 3.2); });
-  visited.forEach(function (p) { pin(p, 'v', 3.2); });
 
   // Counts & legend
   var counts = document.getElementById('counts');
@@ -190,7 +227,8 @@
   var homeEl = document.getElementById('homeLabel');
   if (home) {
     homeEl.classList.remove('hidden');
-    homeEl.innerHTML = '<span><span class="dot h"></span>home: ' + escapeHtml(home.name) + '</span>';
+    // URL-supplied names are escaped before insertion into HTML.
+    homeEl.innerHTML = '<span><span class="dot h"></span>' + escapeHtml(home.name) + '</span>';
   } else {
     homeEl.classList.add('hidden');
   }
