@@ -11,6 +11,7 @@
     --visited: #23a26d;   /* green = done */
     --planned: #3b7ddd;   /* blue = house/plan */
     --home: #343a43;      /* high-contrast neutral = current location */
+    --base: #757d88;      /* gray = home base, not visited */
     --ink: #1c1f24;
     --muted: #6b7280;
     --land: #dde2e9;
@@ -23,6 +24,7 @@
       --visited: #43c48b;
       --planned: #6aa4ff;
       --home: #eef0f3;
+      --base: #a4acb8;
       --ink: #eef0f3;
       --muted: #9aa1ab;
       --land: #2b3139;
@@ -70,6 +72,7 @@
   }
   .dot.v { background: var(--visited); }
   .dot.p { background: var(--planned); }
+  .base-key { color: var(--base); margin-right: 5px; }
   .dot.h { background: var(--home); outline: 1px solid var(--home); outline-offset: 2px; }
 
   svg.map { display: block; width: 100%; height: 0; min-height: 0; flex: 1 1 0; }
@@ -78,6 +81,8 @@
   .pin { stroke: var(--halo); stroke-width: 0.9; }
   .pin.v { fill: var(--visited); }
   .pin.p { fill: var(--planned); }
+  .pin.b { fill: var(--base); }
+  .pin.b-ring { fill: none; stroke: var(--base); stroke-width: 0.7; }
   .pin.h { fill: var(--home); }
   .pin.h-ring {
     fill: none; stroke: var(--home); stroke-width: 0.7;
@@ -110,6 +115,7 @@
   }
   @media (max-width: 599px), (max-height: 359px) {
     .legend { display: none; }
+    .zero-count { display: none; }
     .head { justify-content: flex-start; gap: 12px; }
   }
   .chip {
@@ -167,6 +173,7 @@
 
   var visited = parseList(q.get('visited'));
   var planned = parseList(q.get('planned'));
+  var base = parseList(q.get('base'));
   var home = parseList(q.get('home'))[0] || null;
 
   // Equirectangular projection: lon -180..180 → x 0..360, lat 85..-60 → y 0..145
@@ -197,6 +204,16 @@
   });
 
   // Pins
+  // Names can differ between sources; also match within 25 km (haversine).
+  function isCurrent(p) {
+    if (!home) return false;
+    if (p.name.trim().toLowerCase() === home.name.trim().toLowerCase()) return true;
+    var rad = Math.PI / 180;
+    var a = Math.pow(Math.sin((p.lat - home.lat) * rad / 2), 2) +
+      Math.cos(p.lat * rad) * Math.cos(home.lat * rad) *
+      Math.pow(Math.sin((p.lon - home.lon) * rad / 2), 2);
+    return 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, a))) <= 25;
+  }
   var pins = el('g', {}, svg);
   function pin(p, cls, r) {
     var c = el('circle', { cx: X(p.lon).toFixed(1), cy: Y(p.lat).toFixed(1), r: r, class: 'pin ' + cls }, pins);
@@ -205,7 +222,12 @@
     return c;
   }
   planned.forEach(function (p) { pin(p, 'p', 3.2); });
-  visited.forEach(function (p) { pin(p, 'v', 3.2); });
+  visited.forEach(function (p) { if (!isCurrent(p)) pin(p, 'v', 3.2); });
+  base.forEach(function (p) {
+    if (isCurrent(p)) return;
+    pin(p, 'b-ring', 4.1);
+    pin(p, 'b', 1.9);
+  });
   // Current location stays above destinations, even when coordinates overlap.
   if (home) {
     el('circle', { cx: X(home.lon).toFixed(1), cy: Y(home.lat).toFixed(1), r: 5.2, class: 'pin h-ring' }, pins);
@@ -221,8 +243,10 @@
   // Counts & legend
   var counts = document.getElementById('counts');
   counts.innerHTML =
-    '<span><span class="dot v"></span><b>' + visited.length + '</b> visited</span>' +
-    '<span><span class="dot p"></span><b>' + planned.length + '</b> planned</span>';
+    '<span' + (visited.length ? '' : ' class="zero-count"') + '><span class="dot v"></span><b>' + visited.length + '</b> visited</span>' +
+    '<span' + (planned.length ? '' : ' class="zero-count"') + '><span class="dot p"></span><b>' + planned.length + '</b> planned</span>';
+  if (base.length) counts.innerHTML +=
+    '<span><span class="base-key">⌂</span><b>' + base.length + '</b> base</span>';
 
   var homeEl = document.getElementById('homeLabel');
   if (home) {
@@ -246,7 +270,7 @@
   chips(visited, 'v');
   chips(planned, 'p');
 
-  if (!visited.length && !planned.length) {
+  if (!visited.length && !planned.length && !base.length) {
     var note = document.getElementById('emptyNote');
     note.classList.remove('hidden');
     note.innerHTML = 'No destinations yet. Add <code>visited</code> and <code>planned</code> as ' +

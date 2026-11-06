@@ -41,11 +41,18 @@ an empty state. A raw `+` becomes a space in query parsing: always encode as `%2
 | --- | --- | --- |
 | `visited` | `Paris:48.86:2.35,London:51.51:-0.13` | Green pins |
 | `planned` | `Tokyo:35.68:139.69,Oslo:59.91:10.75` | Blue pins |
-| `home` | `Example:0:0` | Gray ring + dot; first entry only |
+| `base` | `Example:0:0` | Optional home bases: small gray dot with thin ring; not visited |
+| `home` | `Example:0:0` | Pulsing current-location ring + dot and city label; first entry only |
 
 Use comma-separated `Name:lat:lon` entries. Names must not contain commas or colons.
 Coordinates: latitude -90..90, longitude -180..180. Invalid entries are skipped.
-Hover titles and legend chips show names; the header shows visited/planned counts.
+Hover titles and legend chips show names; the header shows visited/planned counts
+and a `⌂` base count when provided. Counts reflect input lists, including cities
+whose pins are suppressed. Base and visited pins matching `home` are hidden:
+case-insensitive trimmed name OR haversine distance at most 25 km. Only the
+pulsing current marker is drawn for these matches. Planned pins are unchanged.
+Mobile hides zero counts and city chips; desktop chips remain visited/planned only.
+The optional `base` list defaults to empty; existing parameters still work.
 No destinations shows a base map and a hint.
 
 ## Design and layout
